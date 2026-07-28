@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/TopNav";
 import { Button } from "@/components/ui/button";
@@ -13,20 +13,77 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { createBrowserClient } from "@supabase/ssr";
 
-const mockChildren = [
-  { id: "1", name: "Amara", age: 5 },
-  { id: "2", name: "Kofi", age: 8 },
-];
-
-const questionsRemaining = 10;
+type Child = {
+  id: string;
+  name: string;
+  age: number;
+};
 
 export default function HomePage() {
   const router = useRouter();
-  const [childId, setChildId] = useState<string | undefined>(mockChildren[0]?.id);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [childId, setChildId] = useState<string | undefined>(undefined);
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [questionsRemaining, setQuestionsRemaining] = useState(10);
 
-  const disabled = !text.trim() || !childId || questionsRemaining <= 0;
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("children")
+        .select("id, name, age")
+        .order("created_at", { ascending: true });
+
+      if (!error && data) {
+        setChildren(data);
+        if (data.length > 0) setChildId(data[0].id);
+      }
+
+      // fetch today's usage
+      const today = new Date().toISOString().split("T")[0];
+      const { data: usage } = await supabase
+        .from("daily_usage")
+        .select("count")
+        .eq("user_id", user.id)
+        .eq("date", today)
+        .single();
+
+      if (usage) {
+        setQuestionsRemaining(10 - usage.count);
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  const disabled = !text.trim() || !childId || questionsRemaining <= 0 || text.length < 10;
+
+  const handleSubmit = () => {
+    if (!childId) return;
+    const selectedChild = children.find((c) => c.id === childId);
+    if (!selectedChild) return;
+
+    sessionStorage.setItem(
+      "parentwise:query",
+      JSON.stringify({ childId, childName: selectedChild.name, age: selectedChild.age, question: text })
+    );
+    router.push("/response");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -47,24 +104,29 @@ export default function HomePage() {
             <CardContent className="space-y-5 p-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Child</label>
-                {mockChildren.length === 0 ? (
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">Loading...</p>
+                ) : children.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
                     You haven't added any children yet.{" "}
                     <button
                       className="font-medium text-primary hover:underline"
-                      onClick={() => router.push("/profiles")}
+                      onClick={() => router.push("/profiles/new")}
                     >
                       Add one
                     </button>
                     .
                   </div>
                 ) : (
-                 <Select value={childId} onValueChange={(value) => setChildId(value ?? undefined)}>
+                  <Select
+                    value={childId}
+                    onValueChange={(value) => setChildId(value ?? undefined)}
+                  >
                     <SelectTrigger className="rounded-2xl">
                       <SelectValue placeholder="Select a child" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockChildren.map((c) => (
+                      {children.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name} · {c.age}
                         </SelectItem>
@@ -82,8 +144,9 @@ export default function HomePage() {
                   placeholder="Describe what's happening with your child..."
                   className="resize-none rounded-2xl text-base"
                 />
-                <div className="flex justify-end text-xs text-muted-foreground">
-                  {text.length}/1000
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{text.length < 10 && text.length > 0 ? "Minimum 10 characters" : ""}</span>
+                  <span>{text.length}/1000</span>
                 </div>
               </div>
 
@@ -92,7 +155,7 @@ export default function HomePage() {
                   size="lg"
                   className="w-full rounded-2xl"
                   disabled={disabled}
-                  onClick={() => router.push("/response")}
+                  onClick={handleSubmit}
                 >
                   Get Advice
                 </Button>

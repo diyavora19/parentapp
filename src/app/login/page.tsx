@@ -2,14 +2,47 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { createBrowserClient } from "@supabase/ssr";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError("Please fill in all fields");
+      return;
+    }
+    setLoading(true);
+    setError("");
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/home");
+    router.refresh();
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -46,8 +79,16 @@ export default function LoginPage() {
                 className="rounded-2xl"
               />
             </div>
-            <Button className="w-full rounded-2xl" size="lg">
-              Log in
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+            <Button
+              className="w-full rounded-2xl"
+              size="lg"
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? "Logging in..." : "Log in"}
             </Button>
           </CardContent>
         </Card>

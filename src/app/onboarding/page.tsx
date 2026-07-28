@@ -1,22 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter} from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { createBrowserClient } from "@supabase/ssr";
 
 export default function OnboardingPage() {
-    const router = useRouter();
-    const [step, setStep] = useState<"welcome" | "addChild">("welcome");
-    const [name, setName] = useState("");
+  const router = useRouter();
+  const [step, setStep] = useState<"welcome" | "addChild">("welcome");
+  const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim()) {
       setError("Please enter your child's name");
       return;
@@ -26,8 +28,33 @@ export default function OnboardingPage() {
       setError("Please enter a valid age between 0 and 18");
       return;
     }
+    setLoading(true);
     setError("");
-    // save to Supabase coming later
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("children").insert({
+      user_id: user.id,
+      name: name.trim(),
+      age: ageNum,
+      notes: notes.trim() || null,
+    });
+
+    if (insertError) {
+      setError("Could not save profile. Please try again.");
+      setLoading(false);
+      return;
+    }
+
     router.push("/home");
   };
 
@@ -117,9 +144,9 @@ export default function OnboardingPage() {
               className="w-full rounded-2xl"
               size="lg"
               onClick={handleSubmit}
-              disabled={!name.trim() || !age}
+              disabled={!name.trim() || !age || loading}
             >
-              Done, let's go
+              {loading ? "Saving..." : "Done, let's go"}
             </Button>
           </CardContent>
         </Card>

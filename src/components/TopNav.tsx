@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Home, History, Users, Settings, LogOut, Sprout } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createBrowserClient } from "@supabase/ssr";
 
 const items = [
   { href: "/home", label: "Home", icon: Home },
@@ -14,6 +15,17 @@ const items = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
@@ -44,6 +56,7 @@ export function TopNav() {
             );
           })}
           <button
+            onClick={handleLogout}
             className="ml-1 flex items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-medium text-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Log out"
           >

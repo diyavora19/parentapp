@@ -1,20 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/TopNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { createBrowserClient } from "@supabase/ssr";
 
-const mockChildren = [
-  { id: "1", name: "Amara", age: 5, notes: "Very sensitive, loves animals, gets overwhelmed easily" },
-  { id: "2", name: "Kofi", age: 8, notes: "Energetic, loves football, struggles with transitions" },
-];
+type Child = {
+  id: string;
+  name: string;
+  age: number;
+  notes: string | null;
+};
 
 export default function ProfilesPage() {
   const router = useRouter();
-  const [children, setChildren] = useState(mockChildren);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchChildren = async () => {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("Session user:", session?.user?.id);
+
+      const { data, error } = await supabase
+        .from("children")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      console.log("Data:", data);
+      console.log("Error:", error);
+
+      if (error) {
+        setError("Could not load profiles");
+      } else {
+        setChildren(data || []);
+      }
+      setLoading(false);
+    };
+
+    fetchChildren();
+  }, []);
+
+  const handleDelete = async (id: string) => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { error } = await supabase
+      .from("children")
+      .delete()
+      .eq("id", id);
+
+    if (!error) {
+      setChildren(children.filter((c) => c.id !== id));
+    }
+  };
 
   const canAdd = children.length < 3;
 
@@ -41,7 +90,19 @@ export default function ProfilesPage() {
             </Button>
           </div>
 
-          {children.length === 0 ? (
+          {loading ? (
+            <Card className="rounded-3xl border-border/60 shadow-sm">
+              <CardContent className="flex items-center justify-center py-16">
+                <p className="text-muted-foreground text-sm">Loading profiles...</p>
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <Card className="rounded-3xl border-border/60 shadow-sm">
+              <CardContent className="flex items-center justify-center py-16">
+                <p className="text-destructive text-sm">{error}</p>
+              </CardContent>
+            </Card>
+          ) : children.length === 0 ? (
             <Card className="rounded-3xl border-border/60 shadow-sm">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-3">
                 <p className="text-muted-foreground text-sm">
@@ -87,7 +148,7 @@ export default function ProfilesPage() {
                         variant="ghost"
                         size="icon"
                         className="rounded-2xl text-destructive hover:text-destructive"
-                        onClick={() => setChildren(children.filter((c) => c.id !== child.id))}
+                        onClick={() => handleDelete(child.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

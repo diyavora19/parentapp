@@ -2,18 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSignup = async () => {
+    if (!email || !password || !confirm) {
+      setError("Please fill in all fields");
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
       return;
@@ -22,8 +30,23 @@ export default function SignupPage() {
       setError("Passwords do not match");
       return;
     }
+    setLoading(true);
     setError("");
-    // auth logic coming later
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/onboarding");
+    router.refresh();
   };
 
   return (
@@ -77,9 +100,10 @@ export default function SignupPage() {
             <Button
               className="w-full rounded-2xl"
               size="lg"
-              onClick={handleSubmit}
+              onClick={handleSignup}
+              disabled={loading}
             >
-              Create account
+              {loading ? "Creating account..." : "Create account"}
             </Button>
           </CardContent>
         </Card>
