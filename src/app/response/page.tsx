@@ -1,15 +1,142 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/TopNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookmarkCheck, ChevronLeft } from "lucide-react";
+import { BookmarkCheck, ChevronLeft, Loader2 } from "lucide-react";
+import { createBrowserClient } from "@supabase/ssr";
+
+type Response = {
+  whatsHappening: string;
+  whatToDoNow: string;
+  longerTerm: string;
+};
 
 export default function ResponsePage() {
   const router = useRouter();
+  const [response, setResponse] = useState<Response | null>(null);
+  const [question, setQuestion] = useState("");
+  const [childName, setChildName] = useState("");
+  const [childId, setChildId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [specialMessage, setSpecialMessage] = useState("");
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("parentwise:query");
+    if (!raw) {
+      router.push("/home");
+      return;
+    }
+
+    const { childId, childName, age, question, notes } = JSON.parse(raw);
+    setQuestion(question);
+    setChildName(childName);
+    setChildId(childId);
+
+    const fetchResponse = async () => {
+      // Check and increment rate limit
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+      const { data: usage } = await supabase
+        .from("daily_usage")
+        .select("count")
+        .eq("user_id", user.id)
+        .eq("date", today)
+        .single();
+
+      if (usage && usage.count >= 10) {
+        setError("You've reached your 10 questions for today. Come back tomorrow.");
+        setLoading(false);
+        return;
+      }
+
+      // Call the API
+      const res = await fetch("/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, childName, age, notes }),
+      });
+
+      const data = await res.json();
+
+      if (data.crisis) {
+        setSpecialMessage(data.response);
+        setLoading(false);
+        return;
+      }
+
+      if (data.notParenting) {
+        setSpecialMessage(data.response);
+        setLoading(false);
+        return;
+      }
+
+      if (data.error) {
+        setError("Something went wrong. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      setResponse(data);
+
+      // Increment daily usage
+      if (usage) {
+        await supabase
+          .from("daily_usage")
+          .update({ count: usage.count + 1 })
+          .eq("user_id", user.id)
+          .eq("date", today);
+      } else {
+        await supabase
+          .from("daily_usage")
+          .insert({ user_id: user.id, date: today, count: 1 });
+      }
+
+      setLoading(false);
+    };
+
+    fetchResponse();
+  }, []);
+
+  const handleSave = async () => {
+    if (!response) return;
+    setSaving(true);
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("saved_responses").insert({
+      user_id: user.id,
+      child_id: childId,
+      question,
+      whats_happening: response.whatsHappening,
+      what_to_do_now: response.whatToDoNow,
+      longer_term: response.longerTerm,
+    });
+
+    if (!error) setSaved(true);
+    setSaving(false);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -25,85 +152,83 @@ export default function ResponsePage() {
             Back to Home
           </button>
 
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
-              Your question
-            </p>
-            <p className="text-sm text-muted-foreground italic">
-              "My 5 year old keeps hitting other kids at daycare and I don't know what to do."
-            </p>
-          </div>
+          {question && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+                Your question
+              </p>
+              <p className="text-sm text-muted-foreground italic">
+                "{question}"
+              </p>
+            </div>
+          )}
 
-          <Card className="rounded-3xl border-border/60 shadow-sm">
-            <CardContent className="space-y-6 p-6">
-
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
-                  What's Happening
-                </h2>
-                <p className="text-sm leading-relaxed text-foreground">
-                  At this age, hitting is often a communication problem rather than
-                  a behavioural one. Your child may not yet have the words or emotional
-                  regulation skills to express frustration, overwhelm, or a need for
-                  space. This is developmentally normal and does not mean something
-                  is wrong with your child.
+          {loading ? (
+            <Card className="rounded-3xl border-border/60 shadow-sm">
+              <CardContent className="flex flex-col items-center justify-center py-16 space-y-3">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">
+                  Finding the best guidance for you...
                 </p>
-              </div>
-
-              <div className="h-px bg-border" />
-
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
-                  What To Do Now
-                </h2>
-                <ul className="space-y-2 text-sm leading-relaxed text-foreground">
-                  <li className="flex gap-2">
-                    <span className="text-primary font-medium shrink-0">1.</span>
-                    Stay calm and get down to your child's level. Say clearly but
-                    gently: "Hitting hurts. I won't let you hurt others."
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-primary font-medium shrink-0">2.</span>
-                    Name the feeling you think they're having — "It looks like you
-                    were feeling really frustrated." This builds emotional vocabulary
-                    over time.
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-primary font-medium shrink-0">3.</span>
-                    Remove them from the situation briefly so they can regulate,
-                    then reconnect warmly once they're calm.
-                  </li>
-                </ul>
-              </div>
-
-              <div className="h-px bg-border" />
-
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
-                  Longer Term
-                </h2>
-                <p className="text-sm leading-relaxed text-foreground">
-                  Build a daily habit of naming emotions together — during calm
-                  moments, not just when things go wrong. Books, role play, and
-                  simple check-ins like "how is your body feeling right now?" help
-                  children develop the emotional language they need to express
-                  themselves without hitting.
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <Card className="rounded-3xl border-border/60 shadow-sm">
+              <CardContent className="flex items-center justify-center py-16">
+                <p className="text-sm text-destructive">{error}</p>
+              </CardContent>
+            </Card>
+          ) : specialMessage ? (
+            <Card className="rounded-3xl border-border/60 shadow-sm">
+              <CardContent className="p-6">
+                <p className="text-sm leading-relaxed whitespace-pre-line">
+                  {specialMessage}
                 </p>
-              </div>
+              </CardContent>
+            </Card>
+          ) : response ? (
+            <Card className="rounded-3xl border-border/60 shadow-sm">
+              <CardContent className="space-y-6 p-6">
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+                    What's Happening
+                  </h2>
+                  <p className="text-sm leading-relaxed">{response.whatsHappening}</p>
+                </div>
 
-              <div className="h-px bg-border" />
+                <div className="h-px bg-border" />
 
-              <Button
-                className="w-full rounded-2xl"
-                variant={saved ? "outline" : "default"}
-                onClick={() => setSaved(true)}
-              >
-                <BookmarkCheck className="h-4 w-4 mr-2" />
-                {saved ? "Saved!" : "Save Response"}
-              </Button>
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+                    What To Do Now
+                  </h2>
+                  <p className="text-sm leading-relaxed">{response.whatToDoNow}</p>
+                </div>
 
-            </CardContent>
-          </Card>
+                <div className="h-px bg-border" />
+
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+                    Longer Term
+                  </h2>
+                  <p className="text-sm leading-relaxed">{response.longerTerm}</p>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                <Button
+                  className="w-full rounded-2xl"
+                  variant={saved ? "outline" : "default"}
+                  onClick={handleSave}
+                  disabled={saved || saving}
+                >
+                  <BookmarkCheck className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : saved ? "Saved!" : "Save Response"}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
         </div>
       </main>
     </div>

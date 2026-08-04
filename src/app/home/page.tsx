@@ -29,30 +29,29 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [questionsRemaining, setQuestionsRemaining] = useState(10);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   useEffect(() => {
     const fetchData = async () => {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/login");
         return;
       }
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("children")
         .select("id, name, age")
         .order("created_at", { ascending: true });
 
-      if (!error && data) {
+      if (data && data.length > 0) {
         setChildren(data);
-        if (data.length > 0) setChildId(data[0].id);
+        setChildId(data[0].id);
       }
 
-      // fetch today's usage
       const today = new Date().toISOString().split("T")[0];
       const { data: usage } = await supabase
         .from("daily_usage")
@@ -71,16 +70,19 @@ export default function HomePage() {
     fetchData();
   }, []);
 
+  const selectedChild = children.find((c) => c.id === childId);
   const disabled = !text.trim() || !childId || questionsRemaining <= 0 || text.length < 10;
 
   const handleSubmit = () => {
-    if (!childId) return;
-    const selectedChild = children.find((c) => c.id === childId);
     if (!selectedChild) return;
-
     sessionStorage.setItem(
       "parentwise:query",
-      JSON.stringify({ childId, childName: selectedChild.name, age: selectedChild.age, question: text })
+      JSON.stringify({
+        childId,
+        childName: selectedChild.name,
+        age: selectedChild.age,
+        question: text,
+      })
     );
     router.push("/response");
   };
@@ -123,7 +125,11 @@ export default function HomePage() {
                     onValueChange={(value) => setChildId(value ?? undefined)}
                   >
                     <SelectTrigger className="rounded-2xl">
-                      <SelectValue placeholder="Select a child" />
+                      <SelectValue>
+                        {selectedChild
+                          ? `${selectedChild.name} · ${selectedChild.age}`
+                          : "Select a child"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {children.map((c) => (
