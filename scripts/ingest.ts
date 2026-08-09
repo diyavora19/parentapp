@@ -1,6 +1,8 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare module 'pdf-parse-fork';
 import fs from "fs";
 import path from "path";
-import * as pdf from "pdf-parse";
+import pdfParse from "pdf-parse-fork";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
@@ -38,10 +40,11 @@ async function ingestPDF(filePath: string) {
   console.log(`\nProcessing: ${fileName}`);
 
   const buffer = fs.readFileSync(filePath);
-  const { text } = await (pdf as unknown as (buffer: Buffer) => Promise<{ text: string }>)(buffer);
+  const { text } = await pdfParse(buffer);
 
   const chunks = chunkText(text, CHUNK_SIZE);
   console.log(`  → ${chunks.length} chunks`);
+
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
 
