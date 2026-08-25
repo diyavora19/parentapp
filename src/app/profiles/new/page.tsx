@@ -28,6 +28,10 @@ export default function NewProfilePage() {
             setError("Age must be a number between 0 and 18:");
             return;
         }
+        if (!notes.trim()) {
+            setError("Personality notes are required");
+            return;
+        }
 
         setLoading(true);
         setError("");
@@ -47,7 +51,7 @@ export default function NewProfilePage() {
             user_id : user.id,
             name : name.trim(),
             age : ageNum,
-            notes : notes.trim() || null,
+            notes : notes.trim(),
         });
 
         if (error) {
@@ -107,8 +111,7 @@ export default function NewProfilePage() {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">
-                                    Personality Notes {" "}
-                                    <span className="text-muted-foreground font-normal">(optional)</span>
+                                    Personality Notes
                                 </label>
                                 <Textarea
                                     placeholder="e.g. My child is shy and sensitive."
@@ -127,7 +130,7 @@ export default function NewProfilePage() {
                                 className="w-full rounded-2xl"
                                 size="lg"
                                 onClick={handleSubmit}
-                                disabled={!name.trim() || !age || loading}
+                                disabled={!name.trim() || !age || !notes.trim() || loading}
                             >
                                 {loading ? "Saving..." : "Save Profile"}
                             </Button>

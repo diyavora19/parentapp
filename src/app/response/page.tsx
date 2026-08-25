@@ -11,6 +11,7 @@ import { createBrowserClient } from "@supabase/ssr";
 type Response = {
   whatsHappening: string;
   whatToDoNow: string;
+  whatNotToDo: string;
   longerTerm: string;
 };
 
@@ -203,6 +204,15 @@ export default function ResponsePage() {
                     What To Do Now
                   </h2>
                   <p className="text-sm leading-relaxed">{response.whatToDoNow}</p>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+                    What Not To Do
+                  </h2>
+                  <p className="text-sm leading-relaxed">{response.whatNotToDo}</p>
                 </div>
 
                 <div className="h-px bg-border" />

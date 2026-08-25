@@ -59,6 +59,10 @@ export default function EditChildPage() {
             setError("Please enter a valid age between 0 and 18");
             return;
         }
+        if (!notes.trim()) {
+            setError("Personality notes are required");
+            return;
+        }
         setLoading(true);
         setError("");
 
@@ -72,7 +76,7 @@ export default function EditChildPage() {
             .update({
                 name : name.trim(),
                 age : ageNum,
-                notes : notes.trim() || null,
+                notes : notes.trim(),
             })
             .eq("id", id);
 
@@ -141,8 +145,7 @@ export default function EditChildPage() {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">
-                                    Personality Notes {" "}
-                                    <span className="text-muted-foreground font-normal">(optional)</span>
+                                    Personality Notes
                                 </label>
                                 <Textarea
                                     placeholder="e.g. My child is shy and sensitive."
@@ -162,7 +165,7 @@ export default function EditChildPage() {
                                 className="w-full rounded-2xl"
                                 size="lg"
                                 onClick={handleSubmit}
-                                disabled={!name.trim() || !age || loading}
+                                disabled={!name.trim() || !age || !notes.trim() || loading}
                             >
                                 {loading ? "Saving..." : "Save Changes"}
                             </Button>

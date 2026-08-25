@@ -19,6 +19,7 @@ type Child = {
   id: string;
   name: string;
   age: number;
+  notes: string | null;
 };
 
 export default function HomePage() {
@@ -44,7 +45,7 @@ export default function HomePage() {
 
       const { data } = await supabase
         .from("children")
-        .select("id, name, age")
+        .select("id, name, age, notes")
         .order("created_at", { ascending: true });
 
       if (data && data.length > 0) {
@@ -81,6 +82,7 @@ export default function HomePage() {
         childId,
         childName: selectedChild.name,
         age: selectedChild.age,
+        notes: selectedChild.notes,
         question: text,
       })
     );
